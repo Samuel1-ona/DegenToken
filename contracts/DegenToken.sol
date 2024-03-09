@@ -1,91 +1,60 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.20;
 
-contract DegenToken {
-    address public owner;
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
+contract DegenToken is ERC20, ERC20Burnable, Ownable {
+    event Redeemed(address indexed user, uint256 itemId, uint256 quantity);
 
-    uint public totalSupply;
-
-
-    mapping(address => uint) public balanceOf;
-
-
-    mapping(address => mapping(address => uint)) public allowance;
-
-
-    string public name = "Degen";
-
-
-    string public symbol = "DGN";
-
-
-    uint8 public decimals = 18;
-
-    event Transfer(address indexed from, address indexed to, uint value);
-
-
-    event Approval(address indexed owner, address indexed spender, uint value);
-
-    constructor() {
-        owner = msg.sender; // Set the contract deployer as the owner
+    struct Item {
+        uint256 id;
+        string name;
+        uint256 quantity;
     }
 
-    function transfer(address recipient, uint amount) external returns (bool) {
+    Item[] public items;
 
-        require(balanceOf[msg.sender] >= amount, "Not enough balance");
+    constructor(address initialOwner) ERC20("Degen", "DGN") Ownable(initialOwner) {}
 
-        balanceOf[msg.sender] -= amount;
+    // items[0] = Item(1, "Sword of Valor", 35);
+    // items[1] = Item(2, "Shield of Protection", 47);
+    // items[2] = Item(3, "Potion of Healing", 18);
+    function addItem(uint256 id, string memory name, uint256 quantity) public onlyOwner {
+        items.push(Item(id, name, quantity));
+    }
 
-        balanceOf[recipient] += amount;
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
 
-        emit Transfer(msg.sender, recipient, amount);
-
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        require(recipient != address(0), "ERC20: transfer to the zero address");
+        _transfer(_msgSender(), recipient, amount);
         return true;
     }
 
-    function approve(address spender, uint amount) external returns (bool) {
+    function redeem(uint256 itemId, uint256 quantity) public {
+        Item storage item = items[itemId];
+        require(item.id > 0, "Invalid item ID");
+        require(item.quantity >= quantity, "Insufficient quantity to redeem");
+        item.quantity -= quantity;
 
-        allowance[msg.sender][spender] = amount;
-
-        emit Approval(msg.sender, spender, amount);
-
-        return true;
+        emit Redeemed(msg.sender, itemId, quantity);
     }
 
-    function transferFrom(address sender, address recipient, uint amount) external returns (bool) {
-        require( allowance[sender][msg.sender] >= amount, "Not enough allowance" );
-
-        allowance[sender][msg.sender] -= amount;
-
-        balanceOf[sender] -= amount;
-
-        balanceOf[recipient] += amount;
-
-        emit Transfer(sender, recipient, amount);
-
-        return true;
+    function getBalance() public view returns (uint256) {
+        return balanceOf(msg.sender);
     }
 
-    function mint(uint amount) external {
-
-        require(msg.sender == owner, "Only the owner can mint tokens");
-
-        balanceOf[owner] += amount;
-
-        totalSupply += amount;
-
-        emit Transfer(address(0), owner, amount);
+    function burn(uint256 amount) public override {
+        require(balanceOf(_msgSender()) >= amount, "ERC20: burn amount exceeds balance");
+        _burn(_msgSender(), amount);
     }
 
-    function burn(uint amount) external {
-
-        require(balanceOf[msg.sender] >= amount, "Not enough balance to burn");
-
-        balanceOf[msg.sender] -= amount;
-
-        totalSupply -= amount;
-        
-        emit Transfer(msg.sender, address(0), amount);
+    function burnFrom(address account, uint256 amount) public override {
+        require(balanceOf(account) >= amount, "ERC20: burn amount exceeds balance");
+        _burn(account, amount);
     }
 }
